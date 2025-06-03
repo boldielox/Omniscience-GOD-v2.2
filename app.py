@@ -18,7 +18,6 @@ app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB
 db = SQLAlchemy(app)
 
-# --- Core Model (expandable) ---
 class Omniscience(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=True)
@@ -47,7 +46,6 @@ class Omniscience(db.Model):
     def to_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
-# --- Feature Engineering (expandable) ---
 def add_delta_and_oscillator(df, col, window=5):
     if col not in df.columns:
         return df
@@ -64,7 +62,6 @@ def engineer_features(df):
     df['pick_tracked'] = True
     return df
 
-# --- Corruption Detection ---
 def is_csv_corrupted(file_obj):
     try:
         pos = file_obj.tell()
@@ -102,7 +99,6 @@ def is_zip_corrupted(file_obj):
         file_obj.seek(0)
         return True, str(e)
 
-# --- Upload Handler (CSV & ZIP, with corruption detection) ---
 @app.route('/upload_stats', methods=['POST'])
 def upload_stats():
     if 'files' not in request.files:
@@ -179,67 +175,10 @@ def process_csv(file_obj, filename):
         raise Exception(f"Error processing {filename}: {str(e)}")
     return results
 
-# --- Dashboard (expandable) ---
-@app.route('/dashboard')
-def dashboard():
-    stats = Omniscience.query.order_by(Omniscience.timestamp.desc()).limit(20).all()
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Omniscience Dashboard</title>
-        <style>
-            body { font-family: Arial, sans-serif; background: #181818; color: #eee; margin: 20px; }
-            h1 { color: #FFD700; }
-            table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-            th, td { border: 1px solid #444; padding: 8px; text-align: left; }
-            th { background-color: #333; color: #FFD700; }
-            tr:nth-child(even) { background-color: #222; }
-            .cashout { color: #FF4136; font-weight: bold; }
-            .safe { color: #2ECC40; }
-        </style>
-    </head>
-    <body>
-        <h1>Omniscience Sports Analytics Dashboard</h1>
-        <p>Latest 20 records with delta/oscillator analytics and cashout signals</p>
-        <table>
-            <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Avg Bat Speed</th>
-                <th>Delta Bat Speed</th>
-                <th>Oscillator</th>
-                <th>Batter Run Value</th>
-                <th>Cashout Signal</th>
-            </tr>
-            {% for s in stats %}
-            <tr>
-                <td>{{ s.id }}</td>
-                <td>{{ s.name }}</td>
-                <td>{{ s.avg_bat_speed }}</td>
-                <td>{{ s.delta_bat_speed }}</td>
-                <td>{{ s.oscillator_bat_speed }}</td>
-                <td>{{ s.batter_run_value }}</td>
-                <td class="{{ 'cashout' if s.cashout_signal else 'safe' }}">
-                    {{ 'CASHOUT NOW' if s.cashout_signal else 'SAFE' }}
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-    </body>
-    </html>
-    """, stats=stats)
-
-@app.route('/')
-def index():
-    return jsonify({
-        'message': 'OMNISCIENCE v2.2',
-        'status': 'GOD MODE ELITE',
-        'endpoints': {
-            'upload': '/upload_stats [POST]',
-            'dashboard': '/dashboard [GET]'
-        }
-    })
+@app.route('/api/omniscience_stats', methods=['GET'])
+def omniscience_stats():
+    stats = Omniscience.query.order_by(Omniscience.timestamp.desc()).limit(100).all()
+    return jsonify([s.to_dict() for s in stats])
 
 if __name__ == '__main__':
     with app.app_context():
